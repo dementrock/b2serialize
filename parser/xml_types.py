@@ -48,7 +48,7 @@ class XmlChild(AttrDecl):
 
 class XmlAttr(AttrDecl):
 
-    def __init__(self, name, typ, required=False):
+    def __init__(self, name, typ, required=False, *args, **kwargs):
         self._name = name
         self._typ = typ
         self._required = required
@@ -75,7 +75,9 @@ class XmlElem(object):
         attrs = cls.get_attrs()
         inst = cls()
         for name, attr in attrs:
-            setattr(inst, name, attr.from_xml(xml))
+            val = attr.from_xml(xml)
+            if val is not None:
+                setattr(inst, name, val)
         return inst
 
     @classmethod

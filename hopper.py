@@ -1,6 +1,7 @@
 from framework import Framework, main
 from xml_box2d import world_from_xml, find_joint, find_body
 import numpy as np
+from operator import add
 
 
 class Hopper(Framework):
@@ -40,6 +41,24 @@ class Hopper(Framework):
             joint.motorEnabled = True
             joint.motorSpeed = ctrls[idx]*10
             joint.maxMotorTorque = 1000
+
+        com_pos = reduce(add, [x.mass * x.worldCenter for x in self.bodies])
+        com_vel = reduce(add, [x.mass * x.linearVelocity for x in self.bodies])
+
+        pos = [x.worldCenter for x in self.bodies]
+        rot = [x.angle for x in self.bodies]
+
+        linvel = [x.linearVelocity for x in self.bodies]
+        angvel = [x.angularVelocity for x in self.bodies]
+
+
+        # xpos = [x.position for x in self.bodies]
+        # qpos = [
+
+        print com_pos, com_vel
+    
+        # for body in self.bodies:
+        #     print body.userData["name"], body.linearVelocity
 
         super(Hopper, self).Step(settings)
 

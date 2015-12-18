@@ -15,10 +15,37 @@ box2d {
       capsule(common.merge(from: [-0.195, 0], to: [0.195, 0], radius: 0.06, friction: 2.0))
     }
     body(name: :ground, type: :static, position: [0, 0]) {
-      fixture(shape: :polygon, box: [10, 0.05], friction: 2.0, density: 1, group: -2)
+      fixture(shape: :polygon, box: [100, 0.05], friction: 2.0, density: 1, group: -2)
     }
-    joint(type: :revolute, name: :thigh_joint, bodyA: :torso, bodyB: :thigh, anchor: [0, 1.05], limit: [-150.deg, 0.deg], ctrllimit: [-200.deg, 200.deg])
-    joint(type: :revolute, name: :leg_joint, bodyA: :thigh, bodyB: :leg, anchor: [0, 0.6], limit: [-150.deg, 0.deg], ctrllimit: [-200.deg, 200.deg])
-    joint(type: :revolute, name: :foot_joint, bodyA: :leg, bodyB: :foot, anchor: [0, 0.1], limit: [-45.deg, 45.deg], ctrllimit: [-200.deg, 200.deg])
+    joint(
+      type: :revolute,
+      name: :thigh_joint,
+      bodyA: :torso,
+      bodyB: :thigh,
+      motor: true,
+      anchor: [0, 1.05],
+      limit: [-150.deg, 0.deg],
+      ctrllimit: [-200.deg, 200.deg]
+    )
+    joint(
+      type: :revolute,
+      name: :leg_joint,
+      bodyA: :thigh,
+      bodyB: :leg,
+      motor: true,
+      anchor: [0, 0.6],
+      limit: [-150.deg, 0.deg],
+      ctrllimit: [-200.deg, 200.deg]
+    )
+    joint(
+      type: :revolute,
+      name: :foot_joint,
+      bodyA: :leg,
+      bodyB: :foot,
+      motor: true,
+      anchor: [0, 0.1],
+      limit: [-45.deg, 45.deg],
+      ctrllimit: [-200.deg, 200.deg]
+    )
   }
 }

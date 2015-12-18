@@ -80,10 +80,24 @@ class Tuple(Type):
             segments = s.split(" ")
         if len(segments) != len(self.elem_types):
             raise ValueError(
-                "Length mismatch: expected a tuple of length %d" %
-                len(self.elem_types))
+                "Length mismatch: expected a tuple of length %d; got %s instead" %
+                (len(self.elem_types), s))
         return tuple([typ.from_str(seg)
                       for typ, seg in zip(self.elem_types, segments)])
+
+
+class Either(Type):
+
+    def __init__(self, *elem_types):
+        self.elem_types = elem_types
+
+    def from_str(self, s):
+        for typ in self.elem_types:
+            try:
+                return typ.from_str(s)
+            except ValueError:
+                pass
+        raise ValueError('No match found')
 
 
 class String(Type):
@@ -99,6 +113,13 @@ class Angle(Type):
             return float(s[:-len("deg")]) * np.pi / 180.0
         elif s.endswith("rad"):
             return float(s[:-len("rad")])
-        return float(s)
+        return float(s) * np.pi / 180.0
+
+
+class Bool(Type):
+
+    def from_str(self, s):
+        return s.lower() == "true" or s.lower() == "1"
+
 
 Point2D = lambda: Tuple(Float(), Float())

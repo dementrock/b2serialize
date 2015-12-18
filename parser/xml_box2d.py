@@ -1,9 +1,9 @@
 # pylint: disable=no-init, too-few-public-methods, old-style-class
 
 import xml.etree.ElementTree as ET
-from xml_elem import XmlElem, XmlChild, XmlAttr, XmlChildren
-from xml_attr_types import Tuple, Float, Choice, String, List, Point2D, Hex, \
-    Int, Angle
+from parser.xml_types import XmlElem, XmlChild, XmlAttr, XmlChildren
+from parser.xml_attr_types import Tuple, Float, Choice, String, List, Point2D, Hex, \
+    Int, Angle, Bool, Either
 import Box2D
 
 
@@ -17,8 +17,8 @@ class XmlBox2D(XmlElem):
     def __init__(self):
         self.world = None
 
-    def to_box2d(self):
-        return self.world.to_box2d()
+    def to_box2d(self, extra_data):
+        return self.world.to_box2d(extra_data)
 
 
 class XmlWorld(XmlElem):
@@ -29,20 +29,46 @@ class XmlWorld(XmlElem):
         bodies = XmlChildren("body", lambda: XmlBody)
         gravity = XmlAttr("gravity", Point2D())
         joints = XmlChildren("joint", lambda: XmlJoint)
+        states = XmlChildren("state", lambda: XmlState)
+        controls = XmlChildren("control", lambda: XmlControl)
+        warmStarting = XmlAttr("warmstart", Bool())
+        continuousPhysics = XmlAttr("continuous", Bool())
+        subStepping = XmlAttr("substepping", Bool())
+        velocityIterations = XmlAttr("velitr", Int())
+        positionIterations = XmlAttr("positr", Int())
+        timeStep = XmlAttr("timestep", Float())
 
     def __init__(self):
         self.bodies = []
         self.gravity = None
         self.joints = []
+        self.states = []
+        self.controls = []
+        self.warmStarting = True
+        self.continuousPhysics = True
+        self.subStepping = False
+        self.velocityIterations = 8
+        self.positionIterations = 3
+        self.timeStep = 0.02
 
-    def to_box2d(self):
+    def to_box2d(self, extra_data):
         world = Box2D.b2World(allow_sleeping=False)
+        world.warmStarting = self.warmStarting
+        world.continuousPhysics = self.continuousPhysics
+        world.subStepping = self.subStepping
+        extra_data.velocityIterations = self.velocityIterations
+        extra_data.positionIterations = self.positionIterations
+        extra_data.timeStep = self.timeStep
         if self.gravity:
             world.gravity = self.gravity
         for body in self.bodies:
-            body.to_box2d(world, self)
+            body.to_box2d(world, self, extra_data)
         for joint in self.joints:
-            joint.to_box2d(world, self)
+            joint.to_box2d(world, self, extra_data)
+        for state in self.states:
+            state.to_box2d(world, self, extra_data)
+        for control in self.controls:
+            control.to_box2d(world, self, extra_data)
         return world
 
 
@@ -67,7 +93,7 @@ class XmlBody(XmlElem):
         self.position = None
         self.fixtures = []
 
-    def to_box2d(self, world, xml_world):
+    def to_box2d(self, world, xml_world, extra_data):
         body = world.CreateBody(type=self.TYPES.index(self.typ))
         body.userData = dict(
             name=self.name,
@@ -76,7 +102,7 @@ class XmlBody(XmlElem):
         if self.position:
             body.position = self.position
         for fixture in self.fixtures:
-            fixture.to_box2d(body, self)
+            fixture.to_box2d(body, self, extra_data)
         return body
 
 
@@ -88,7 +114,9 @@ class XmlFixture(XmlElem):
         shape = XmlAttr("shape",
                         Choice("polygon", "circle", "edge"), required=True)
         vertices = XmlAttr("vertices", List(Point2D()))
-        box = XmlAttr("box", Point2D())
+        box = XmlAttr("box", Either(
+            Point2D(),
+            Tuple(Float(), Float(), Point2D(), Angle())))
         radius = XmlAttr("radius", Float())
         width = XmlAttr("width", Float())
         center = XmlAttr("center", Point2D())
@@ -114,7 +142,7 @@ class XmlFixture(XmlElem):
         self.center = None
         self.angle = None
 
-    def to_box2d(self, body, xml_body):
+    def to_box2d(self, body, xml_body, extra_data):
         attrs = dict()
         if self.friction:
             attrs["friction"] = self.friction
@@ -161,75 +189,119 @@ class XmlJoint(XmlElem):
     tag = "joint"
 
     JOINT_TYPES = {
-        "revolute": Box2D.b2RevoluteJoint
+        "revolute": Box2D.b2RevoluteJoint,
+        "friction": Box2D.b2FrictionJoint,
     }
 
     class Meta:
         bodyA = XmlAttr("bodyA", String(), required=True)
         bodyB = XmlAttr("bodyB", String(), required=True)
         anchor = XmlAttr("anchor", Tuple(Float(), Float()))
-        anchorA = XmlAttr("anchorA", Tuple(Float(), Float()))
-        anchorB = XmlAttr("anchorB", Tuple(Float(), Float()))
-        lower_angle = XmlAttr("lower_angle", Angle())
-        upper_angle = XmlAttr("upper_angle", Angle())
-        typ = XmlAttr("type", Choice("revolute"), required=True)
+        limit = XmlAttr("limit", Tuple(Angle(), Angle()))
+        ctrllimit = XmlAttr("ctrllimit", Tuple(Angle(), Angle()))
+        typ = XmlAttr("type", Choice("revolute", "friction"), required=True)
         name = XmlAttr("name", String())
-        angular_damping = XmlAttr("angular_damping", Float())
-        linear_damping = XmlAttr("linear_damping", Float())
+        motor = XmlAttr("motor", Bool())
 
     def __init__(self):
         self.bodyA = None
         self.bodyB = None
         self.anchor = None
-        self.anchorA = None
-        self.anchorB = None
-        self.lower_angle = None
-        self.upper_angle = None
+        self.limit = None
+        self.ctrllimit = None
+        self.motor = False
         self.typ = None
         self.name = None
-        self.angular_damping = None
-        self.linear_damping = None
 
-    def to_box2d(self, world, xml_world):
+    def to_box2d(self, world, xml_world, extra_data):
         bodyA = find_body(world, self.bodyA)
         bodyB = find_body(world, self.bodyB)
         args = dict()
         if self.typ == "revolute":
             if self.anchor:
                 args["anchor"] = self.anchor
-            if self.anchorA:
-                args["anchorA"] = self.anchorA
-            if self.anchorB:
-                args["anchorB"] = self.anchorB
-            if self.lower_angle or self.upper_angle:
+            if self.limit:
                 args["enableLimit"] = True
-            if self.lower_angle:
-                args["lowerAngle"] = self.lower_angle
-            if self.upper_angle:
-                args["upperAngle"] = self.upper_angle
-            if self.linear_damping:
-                args["linearDamping"] = self.linear_damping
-            if self.angular_damping:
-                args["angularDamping"] = self.angular_damping
-
-        # args["motorEnabled"] = True
-        # args["motorSpeed"] = 1
-        # args["maxMotorTorque"] = 1000
-
+                args["lowerAngle"] = self.limit[0]
+                args["upperAngle"] = self.limit[1]
+        elif self.typ == "friction":
+            if self.anchor:
+                args["anchor"] = self.anchor
+        else:
+            raise NotImplementedError
+        userData = dict(
+            ctrllimit=self.ctrllimit,
+            motor=self.motor,
+            name=self.name
+        )
         joint = world.CreateJoint(type=self.JOINT_TYPES[self.typ],
                                   bodyA=bodyA,
                                   bodyB=bodyB,
                                   **args)
-        # joint.motorEnabled = True
-        # joint.motorSpeed = 100
-        # joint.maxMotorTorque = 100000
-
-        joint.userData = dict(
-            name=self.name,
-        )
+        joint.userData = userData
         return joint
 
 
+class XmlState(XmlElem):
+
+    tag = "state"
+
+    class Meta:
+        typ = XmlAttr(
+            "type", Choice(
+                "xpos", "ypos", "xvel", "yvel", "apos", "avel"))
+        body = XmlAttr("body", String())
+
+    def __init__(self):
+        self.typ = None
+        self.body = None
+
+    def to_box2d(self, world, xml_world, extra_data):
+        extra_data.states.append(self)
+
+
+class XmlControl(XmlElem):
+
+    tag = "control"
+
+    class Meta:
+        typ = XmlAttr("type", Choice("force"), required=True)
+        body = XmlAttr(
+            "body", String(),
+            help="name of the body to apply force on")
+        anchor = XmlAttr(
+            "anchor", Point2D(),
+            help="location of the force in local coordinate frame")
+        direction = XmlAttr(
+            "direction", Point2D(),
+            help="direction of the force in local coordinate frame")
+        ctrllimit = XmlAttr(
+            "ctrllimit", Tuple(Float(), Float()),
+            help="limit of the control input in Newton")
+
+    def __init__(self):
+        self.typ = None
+        self.body = None
+        self.anchor = None
+        self.direction = None
+        self.ctrllimit = None
+
+    def to_box2d(self, world, xml_world, extra_data):
+        extra_data.controls.append(self)
+
+
+class ExtraData(object):
+
+    def __init__(self):
+        self.states = []
+        self.controls = []
+        self.velocityIterations = None
+        self.positionIterations = None
+        self.timeStep = None
+
+
 def world_from_xml(s):
+    extra_data = ExtraData()
     box2d = XmlBox2D.from_xml(ET.fromstring(s))
-    return box2d.to_box2d()
+    world = box2d.to_box2d(extra_data)
+    return world, extra_data
