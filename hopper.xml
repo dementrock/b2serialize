@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+<!-- Auto-generated. Do not edit! -->
 <box2d>
   <world gravity="0,-9.8">
     <body name="torso" type="dynamic" position="0,1.25">

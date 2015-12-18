@@ -90,4 +90,5 @@ end
 builder = Nokogiri::XML::Builder.new do
   eval(open(ARGV.first).read)
 end
-puts builder.to_xml
+puts "<!-- Auto-generated. Do not edit! -->"
+puts builder.doc.root.to_s

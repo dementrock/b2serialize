@@ -9,3 +9,5 @@ cartpole.xml: cartpole.xml.rb
 test_cartpole:
 	python cartpole.py
 
+clean:
+	rm *.xml

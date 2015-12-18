@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+<!-- Auto-generated. Do not edit! -->
 <box2d>
   <world timestep="0.016666666666666666">
     <body name="cart" type="dynamic" position="0,0.43301270189221935">
